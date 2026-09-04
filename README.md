@@ -1,45 +1,29 @@
-<!DOCTYPE html>
+
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lead Scout & Outreach AI</title>
+  <title>Auto-Analyze Store Pitcher</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
-    .container { max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-    h2 { font-size: 1.2rem; margin-top: 0; }
-    label { font-size: 0.85rem; font-weight: 600; color: #555; display: block; margin-top: 12px; }
-    input, select, textarea { width: 100%; padding: 10px; margin-top: 4px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.95rem; }
-    button { width: 100%; background: #0066ff; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; margin-top: 15px; cursor: pointer; }
-    
-    /* Floating Action Button */
-    .fab {
-      position: fixed;
-      bottom: 25px;
-      right: 25px;
-      width: 56px;
-      height: 56px;
-      background-color: #0066ff;
-      color: white;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 24px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-      cursor: pointer;
-      z-index: 1000;
-    }
-
-    .output-box { margin-top: 15px; background: #f0f4f8; padding: 12px; border-radius: 6px; border-left: 4px solid #0066ff; font-size: 0.9rem; white-space: pre-line; }
+    .container { max-width: 480px; margin: 0 auto; background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }
+    h2 { font-size: 1.25rem; margin-top: 0; color: #111; }
+    label { font-size: 0.85rem; font-weight: 600; color: #555; display: block; margin-top: 14px; }
+    input, select { width: 100%; padding: 12px; margin-top: 6px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.95rem; }
+    button { width: 100%; background: #0066ff; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; margin-top: 18px; cursor: pointer; font-size: 0.95rem; }
+    button:disabled { background: #99c2ff; cursor: not-allowed; }
+    .card { margin-top: 20px; padding: 14px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; display: none; }
+    .card h3 { margin: 0 0 8px 0; font-size: 0.9rem; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; }
+    .pitch-box { font-size: 0.92rem; line-height: 1.5; color: #1e293b; white-space: pre-line; }
+    .status { font-size: 0.85rem; color: #64748b; margin-top: 10px; text-align: center; }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <h2>Store Outreach Assistant</h2>
+  <h2>Smart Store Outreach</h2>
   
   <label for="platform">Platform</label>
   <select id="platform">
@@ -47,77 +31,125 @@
     <option value="TikTok">TikTok</option>
   </select>
 
-  <label for="handle">Store Handle / Name</label>
-  <input type="text" id="handle" placeholder="@storename">
+  <label for="username">Profile Username</label>
+  <input type="text" id="username" placeholder="e.g. fashionbrand_store">
 
-  <label for="niche">Store Niche</label>
-  <input type="text" id="niche" placeholder="e.g. Apparel, Skincare, Candles">
+  <button id="analyzeBtn" onclick="analyzeAndPitch()">Analyze Profile & Generate Pitch</button>
+  <div id="statusText" class="status"></div>
 
-  <label for="bio">Profile Bio / Notes</label>
-  <textarea id="bio" rows="3" placeholder="Paste store bio or observed pain points (e.g. slow site, bad product photos)..."></textarea>
+  <!-- Detected Bio Section -->
+  <div id="bioCard" class="card">
+    <h3>Detected Bio & Niche</h3>
+    <div id="bioText" style="font-size:0.88rem; color:#334155;"></div>
+  </div>
 
-  <button onclick="generateOutreach()">Generate Pitch Suggestion</button>
-
-  <div id="resultBox" class="output-box" style="display:none;"></div>
-  
-  <button id="saveBtn" style="display:none; background: #28a745;" onclick="saveToSupabase()">Save Lead to Supabase</button>
+  <!-- Generated Pitch Section -->
+  <div id="pitchCard" class="card">
+    <h3>Suggested Outreach Pitch</h3>
+    <div id="pitchText" class="pitch-box"></div>
+    <button style="background: #10b981; margin-top:12px;" onclick="saveToSupabase()">Save to Supabase</button>
+  </div>
 </div>
 
-<div class="fab" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">+</div>
-
 <script>
-  // Updated with your Supabase Credentials
   const SUPABASE_URL = "https://xpkstinuppevucqnxvka.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_r9e_98_wGqzidjzB32EqNw_f00kWwgx";
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const RAPIDAPI_KEY = "YOUR_RAPIDAPI_KEY"; // Replace with your RapidAPI key when live scraper is needed
 
-  let currentGeneratedMessage = "";
+  const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  function generateOutreach() {
-    const handle = document.getElementById('handle').value.trim();
-    const niche = document.getElementById('niche').value.trim();
-    const bio = document.getElementById('bio').value.trim();
+  let currentProfileData = {};
+
+  async function analyzeAndPitch() {
     const platform = document.getElementById('platform').value;
+    const username = document.getElementById('username').value.trim().replace('@', '');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const statusText = document.getElementById('statusText');
 
-    if (!handle) {
-      alert("Please enter a store handle.");
+    if (!username) {
+      alert("Please enter a username.");
       return;
     }
 
-    // Welcoming, non-salesy outreach framework
-    currentGeneratedMessage = `Hey ${handle}! 👋 Came across your ${niche || 'store'} on ${platform} and really liked your brand setup.\n\n` +
-      `Noticed ${bio ? 'from your profile that ' + bio : 'your product catalog looks solid'}. ` +
-      `Quick question—are you currently looking to upgrade your online store experience or boost conversions this month? ` +
-      `Would love to share a quick 1-minute visual idea with you if you're open to it!`;
+    analyzeBtn.disabled = true;
+    statusText.innerText = `Fetching ${platform} profile details...`;
 
-    const resultBox = document.getElementById('resultBox');
-    resultBox.innerText = currentGeneratedMessage;
-    resultBox.style.display = 'block';
-    document.getElementById('saveBtn').style.display = 'block';
+    try {
+      // 1. Fetch Profile Info
+      const fetchedBio = await fetchProfileBio(platform, username);
+      
+      // 2. Display Bio Card
+      document.getElementById('bioText').innerText = fetchedBio || "No public bio found. Generating generalized store pitch...";
+      document.getElementById('bioCard').style.display = 'block';
+
+      // 3. Analyze and Create Dynamic Pitch
+      statusText.innerText = "Analyzing profile data & composing message...";
+      const pitch = generateCustomPitch(username, platform, fetchedBio);
+
+      // 4. Save state & Display Pitch
+      currentProfileData = {
+        platform: platform,
+        handle: `@${username}`,
+        bio_notes: fetchedBio,
+        suggested_message: pitch
+      };
+
+      document.getElementById('pitchText').innerText = pitch;
+      document.getElementById('pitchCard').style.display = 'block';
+      statusText.innerText = "Done!";
+
+    } catch (err) {
+      statusText.innerText = "";
+      alert("Error fetching profile: " + err.message);
+    } finally {
+      analyzeBtn.disabled = false;
+    }
+  }
+
+  async function fetchProfileBio(platform, username) {
+    if (RAPIDAPI_KEY === "YOUR_RAPIDAPI_KEY") {
+      return `[Demo Bio Mode] Premium ${platform} brand page for @${username}. Sells apparel & accessories. Link in bio to store.`;
+    }
+
+    const endpoint = platform === "Instagram" 
+      ? `https://instagram-scraper-api2.p.rapidapi.com/v1/info?username_or_id_or_url=${username}`
+      : `https://tiktok-scraper7.p.rapidapi.com/user/info?unique_id=${username}`;
+
+    const res = await fetch(endpoint, {
+      method: 'GET',
+      headers: {
+        'x-rapidapi-key': RAPIDAPI_KEY,
+        'x-rapidapi-host': platform === "Instagram" ? 'instagram-scraper-api2.p.rapidapi.com' : 'tiktok-scraper7.p.rapidapi.com'
+      }
+    });
+
+    const data = await res.json();
+    return data?.data?.biography || data?.user?.signature || "Active e-commerce brand account.";
+  }
+
+  function generateCustomPitch(handle, platform, bio) {
+    let nicheGuess = "store";
+    const bioLower = bio.toLowerCase();
+
+    if (bioLower.includes("apparel") || bioLower.includes("clothing") || bioLower.includes("wear")) nicheGuess = "clothing brand";
+    else if (bioLower.includes("skin") || bioLower.includes("beauty") || bioLower.includes("care")) nicheGuess = "beauty brand";
+    else if (bioLower.includes("jewel") || bioLower.includes("accessories")) nicheGuess = "jewelry brand";
+
+    return `Hey @${handle}! 👋\n\n` +
+      `Came across your ${nicheGuess} on ${platform} and really liked your brand direction.\n\n` +
+      `Noticed you're actively building out your store—quick question: are you currently looking to improve your web conversion rates or overhaul your site layout this month?\n\n` +
+      `Would love to send over a 1-minute visual concept idea if you're open to it!`;
   }
 
   async function saveToSupabase() {
-    const platform = document.getElementById('platform').value;
-    const handle = document.getElementById('handle').value;
-    const niche = document.getElementById('niche').value;
-    const bio = document.getElementById('bio').value;
-
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('store_leads')
-      .insert([
-        { 
-          platform: platform, 
-          handle: handle, 
-          niche: niche, 
-          bio_notes: bio, 
-          suggested_message: currentGeneratedMessage 
-        }
-      ]);
+      .insert([currentProfileData]);
 
     if (error) {
       alert('Error saving lead: ' + error.message);
     } else {
-      alert('Lead successfully saved to Supabase database!');
+      alert('Lead saved successfully to Supabase!');
     }
   }
 </script>
