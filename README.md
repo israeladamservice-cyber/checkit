@@ -18,6 +18,7 @@
     .card h3 { margin: 0 0 8px 0; font-size: 0.85rem; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; }
     .pitch-box { font-size: 0.92rem; line-height: 1.5; color: #1e293b; white-space: pre-line; background: #fff; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1; }
     .status { font-size: 0.85rem; color: #0066ff; margin-top: 10px; text-align: center; font-weight: 600; }
+    .error-box { color: #dc2626; background: #fef2f2; padding: 10px; border-radius: 6px; font-size: 0.85rem; margin-top: 10px; display: none; }
   </style>
 </head>
 <body>
@@ -35,10 +36,11 @@
 
   <button id="analyzeBtn" onclick="analyzeAndPitch()">Analyze Live Profile</button>
   <div id="statusText" class="status"></div>
+  <div id="errorText" class="error-box"></div>
 
   <!-- Real Bio Card -->
   <div id="bioCard" class="card">
-    <h3>Scraped Instagram Bio</h3>
+    <h3>Profile Bio Detected</h3>
     <div id="bioText" style="font-size:0.88rem; color:#334155; font-weight: 500;"></div>
   </div>
 
@@ -51,8 +53,6 @@
 </div>
 
 <script>
-  // Active Credentials
-  const RAPIDAPI_KEY = "c6fb44723cmshdd988c08dc208d2p1c1df6jsn58b966801074"; 
   const SUPABASE_URL = "YOUR_SUPABASE_URL"; 
   const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 
@@ -67,6 +67,7 @@
     const username = document.getElementById('username').value.trim().replace('@', '');
     const analyzeBtn = document.getElementById('analyzeBtn');
     const statusText = document.getElementById('statusText');
+    const errorText = document.getElementById('errorText');
 
     if (!username) {
       alert("Please enter a username.");
@@ -74,49 +75,49 @@
     }
 
     analyzeBtn.disabled = true;
-    statusText.innerText = `Fetching live Instagram bio for @${username}...`;
+    errorText.style.display = 'none';
+    statusText.innerText = `Analyzing live page for @${username}...`;
 
     try {
-      const res = await fetch(`https://instagram-scraper-api2.p.rapidapi.com/v1/info?username_or_id_or_url=${username}`, {
-        method: 'GET',
-        headers: {
-          'x-rapidapi-key': RAPIDAPI_KEY,
-          'x-rapidapi-host': 'instagram-scraper-api2.p.rapidapi.com'
-        }
-      });
+      // Scrape open web metadata directly without third-party API keys
+      const targetUrl = encodeURIComponent(`https://www.instagram.com/${username}/`);
+      const res = await fetch(`https://api.allorigins.win/get?url=${targetUrl}`);
 
-      if (!res.ok) {
-        throw new Error(`API call failed with status ${res.status}`);
+      if (!res.ok) throw new Error("Could not reach Instagram profile page.");
+
+      const data = await res.json();
+      const htmlText = data.contents;
+
+      // Extract description tag
+      let extractedBio = "Active Instagram brand page.";
+      const metaMatches = htmlText.match(/<meta property="og:description" content="([^"]*)"/i) || 
+                          htmlText.match(/<meta name="description" content="([^"]*)"/i);
+
+      if (metaMatches && metaMatches[1]) {
+        extractedBio = metaMatches[1];
       }
 
-      const responseData = await res.json();
-      
-      // Fallback extraction for different response payload layouts
-      const realBio = responseData?.data?.biography || 
-                      responseData?.user?.biography || 
-                      responseData?.data?.user?.biography || 
-                      "No bio text found on this account.";
-
-      // Display scraped bio
-      document.getElementById('bioText').innerText = realBio;
+      // Display scraped profile summary
+      document.getElementById('bioText').innerText = extractedBio;
       document.getElementById('bioCard').style.display = 'block';
 
-      // Build personalized pitch
-      const pitch = buildPitchFromBio(username, realBio);
+      // Build outreach pitch
+      const pitch = buildPitchFromBio(username, extractedBio);
       document.getElementById('pitchText').innerText = pitch;
       document.getElementById('pitchCard').style.display = 'block';
 
       currentProfileData = {
         platform: "Instagram",
         handle: `@${username}`,
-        bio_notes: realBio,
+        bio_notes: extractedBio,
         suggested_message: pitch
       };
 
       statusText.innerText = "Fetch Successful!";
     } catch (err) {
-      statusText.innerText = "Error fetching profile.";
-      alert("Scraping failed: " + err.message);
+      statusText.innerText = "";
+      errorText.innerText = "Error: " + err.message;
+      errorText.style.display = 'block';
     } finally {
       analyzeBtn.disabled = false;
     }
@@ -124,29 +125,23 @@
 
   function buildPitchFromBio(handle, bio) {
     const bioLower = bio.toLowerCase();
-    let niche = "brand";
+    let niche = "e-commerce brand";
 
-    if (bioLower.includes("apparel") || bioLower.includes("clothing") || bioLower.includes("wear") || bioLower.includes("fashion") || bioLower.includes("outfit")) {
+    if (bioLower.includes("apparel") || bioLower.includes("clothing") || bioLower.includes("wear") || bioLower.includes("fashion")) {
       niche = "apparel brand";
-    } else if (bioLower.includes("skin") || bioLower.includes("beauty") || bioLower.includes("cosmetics") || bioLower.includes("glow")) {
-      niche = "beauty brand";
-    } else if (bioLower.includes("jewel") || bioLower.includes("craft") || bioLower.includes("shop") || bioLower.includes("store")) {
-      niche = "e-commerce store";
+    } else if (bioLower.includes("skin") || bioLower.includes("beauty") || bioLower.includes("cosmetics")) {
+      niche = "beauty store";
     }
 
-    const snippet = bio !== "No bio text found on this account." 
-      ? `\n\nNoticed in your bio: "${bio.slice(0, 75)}${bio.length > 75 ? '...' : ''}"`
-      : '';
-
     return `Hey @${handle}! 👋\n\n` +
-      `Came across your Instagram page and really liked your brand setup.${snippet}\n\n` +
-      `As someone helping build out high-converting sites for ${niche}s, are you currently looking to upgrade your online store interface to turn more profile visitors into customers?\n\n` +
-      `Would love to share a quick 1-minute visual design concept with you if you're open to it!`;
+      `Came across your Instagram profile while researching active ${niche}s.\n\n` +
+      `Are you currently looking to upgrade your web store design to increase conversion rates for profile visitors this month?\n\n` +
+      `Would love to send over a quick 1-minute visual design concept if you're open to checking it out!`;
   }
 
   async function saveToSupabase() {
     if (!supabase) {
-      alert("Please replace YOUR_SUPABASE_URL and YOUR_SUPABASE_ANON_KEY inside the code with your real Supabase credentials.");
+      alert("Please enter your Supabase URL and Key inside the code to save data.");
       return;
     }
 
@@ -157,7 +152,7 @@
     if (error) {
       alert('Error saving to Supabase: ' + error.message);
     } else {
-      alert('Lead successfully saved to Supabase!');
+      alert('Saved directly to Supabase!');
     }
   }
 </script>
