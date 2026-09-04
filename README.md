@@ -66,9 +66,10 @@
 <div class="fab" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">+</div>
 
 <script>
-  const SUPABASE_URL = "YOUR_SUPABASE_URL";
-  const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
-  const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  // Updated with your Supabase Credentials
+  const SUPABASE_URL = "https://xpkstinuppevucqnxvka.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_r9e_98_wGqzidjzB32EqNw_f00kWwgx";
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   let currentGeneratedMessage = "";
 
